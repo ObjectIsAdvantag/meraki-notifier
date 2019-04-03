@@ -1,0 +1,22 @@
+{
+  "name": "meraki-notifier",
+  "version": "0.1.0",
+  "description": "Meraki notifier to Webex Teams",
+  "main": "webhook.js",
+  "scripts": {
+    "start": "node webhook.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "webex",
+    "meraki"
+  ],
+  "author": "Stève Sfartz <stsfartz@cisco.com>",
+  "license": "MIT",
+  "dependencies": {
+    "debug": "^4.1.1",
+    "express": "^4.16.4",
+    "node-env-file": "^0.1.8",
+    "node-sparky": "^4.6.0"
+  }
+}

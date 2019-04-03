@@ -1,0 +1,6 @@
+# Dev env
+.vscode/
+
+# Node artefacts
+node_modules
+package-lock.json
