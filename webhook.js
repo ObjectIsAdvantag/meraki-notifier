@@ -4,16 +4,16 @@
 //
 
 /* 
- * a Smartsheet webhook based on Express.js,
- * and posting back to Webex Teams.
- * 
- * see Smartsheet webhook spec: https://smartsheet-platform.github.io/api-docs/#creating-a-webhook
+ * a webhook based on Express.js,
+ * listening to Meraki scanning notifications,
+ * and posting back to Webex Teams as known devices are seen / leave
+ *
  */
 
 // Load environment variables from project .env file
 require('node-env-file')(__dirname + '/.env');
 
-// Check we can request Smartsheet
+// Check for mandatory env variables
 if (!process.env.MERAKI_VALIDATOR) {
     console.log("Please specify a MERAKI_VALIDATOR env variable");
     process.exit(1);
@@ -34,9 +34,6 @@ if (!process.env.TEAMS_SPACE) {
     console.log("Please specify a TEAMS_SPACE env ");
     process.exit(1);
 }
-
-// Timeout for outgoing request
-const DEFAULT_TIMEOUT = 3000; // in seconds
 
 const express = require("express");
 const app = express();
@@ -77,7 +74,7 @@ app.route(cmxRoute)
     // Receive JSON scanning payloads
     .post(function (req, res) {
         const latest = Date.now();
-        fine(`new scanning data received: ${new Date(latest).toGMTString()}`);
+        debug(`new scanning data received: ${new Date(latest).toGMTString()}`);
 
         // check secret
         if (process.env.MERAKI_SECRET !== req.body.secret) {
@@ -109,29 +106,33 @@ app.route(cmxRoute)
 const ssid = process.env.MERAKI_SSID;
 const myPeople = require('./people.js');
 var tracking = {};
+const FlintSparky = require('node-sparky');
+const teamsClient = new FlintSparky({ token: process.env.TEAMS_TOKEN });
 function processScanningPayload(payload) {
 
-    fine(`processing payload with: ${payload.data.observations.length} observations`);
+    debug(`processing payload with: ${payload.data.observations.length} observations`);
 
     // Look for known mac addresses connected to our SSID
     payload.data.observations
         .filter((observation) => {
+            fine(`processing observation`)
             // is device connected to the SSID
             if (ssid !== observation.ssid) {
+                fine('device not connected to SSID')
                 return false;
             }
 
             // Is the Mac address among the list
             if (!observation.clientMac) {
+                fine('no mac address')
                 return false;
             }
-            fine(`checking mac address: ${observation.clientMac} against the list`)
             const deviceOwner = myPeople[observation.clientMac];
             if (!deviceOwner) {
+                fine('device not in list')
                 return false;
             }
-
-            debug(`found device owner: ${deviceOwner}`)
+            fine(`found device owner: ${deviceOwner}, for mac address: ${observation.clientMac}`)
             return true
         })
 
@@ -141,36 +142,33 @@ function processScanningPayload(payload) {
         .forEach((observation) => {
             const trackingEntry = tracking[observation.clientMac];
             if (!trackingEntry) {
+                // New presence detected
+                const owner = myPeople[observation.clientMac];
+                debug(`device: ${observation.clientMac}, from owner: ${owner}, detected on SSID:  ${process.env.MERAKI_SSID}`)
+
                 // Send notification of new presence detected
-                notifyToWebexTeams(observation)
+                const message = {
+                    roomId: process.env.TEAMS_SPACE,
+                    markdown: `good news: ${owner} has reached ${process.env.MERAKI_SSID}`
+                };
+                teamsClient.messageSend(message)
+                    .then((message) => {
+                        fine('message pushed successfully to Teams')
+
+                        // Continue to UPDATE last seen
+                        // see below
+                    })
+                    .catch((err) => {
+                        debug(`could not push message to Teams, err: ${err.message}`);
+                        // We won't update last seen since the notification could not be sent
+                        debug(`ignoring last seen for ${owner}`)
+                        return;
+                    });
             }
 
-            // Update last seen
-            fine(`updating seenTime: ${observation.seenTime} for client: ${observation.clientMac}`)
+            // UPDATE last seen
             tracking[observation.clientMac] = observation.seenTime;
-        });
-}
-
-const FlintSparky = require('node-sparky');
-const teamsClient = new FlintSparky({ token: process.env.TEAMS_TOKEN });
-
-
-function notifyToWebexTeams(observation) {
-    const owner = myPeople[observation.clientMac];
-    debug(`owner detected: ${owner}`)
-
-    // Push message
-    let message = {
-        roomId: process.env.TEAMS_SPACE,
-        markdown: `good news, ${owner} has reached ${process.env.MERAKI_SSID}`
-      };
-      
-      teamsClient.messageSend(message)
-        .then((message) => {
-            debug('message pushed successfully to Teams')
-        })
-        .catch((err) => {
-            debug(`could not push message to Teams, err: ${err.message}`);
+            debug(`updated last seen time to: ${observation.seenTime}, for client: ${observation.clientMac}`)
         });
 }
 
@@ -179,8 +177,54 @@ function notifyToWebexTeams(observation) {
 //
 var port = process.env.PORT || 8080;
 app.listen(port, function () {
-    console.log(`Meraki scaning webhook listening at: ${port}`);
+    console.log(`Meraki scanning webhook listening at: ${port}`);
     console.log("   GET  /          : for health checks");
     console.log(`   POST ${cmxRoute}  : to receive meraki scanning events`);
+
+    // Launch Cron that purges not seen devices
+    const logPurge = require("debug")("meraquoi:purge");
+    const CronJob = require('cron').CronJob;
+    // Every minute, Monday to Friday
+    const interval = process.env.HASLEFT_CRON || 1; // check every minute by default
+    const delay = process.env.HASLEFT_DELAY || 10; // has left SSID if not seen for >10 minutes
+    const job = new CronJob('0 */1 * * * 1-5', purgeEntries, null, false, 'Europe/Paris');
+    job.start();
+    logPurge(`cron checking every ${interval} minute(s), for not seen devices over ${delay} minute(s)`)
+
+    // Elaps time in minutes after which we consider the device has left the SSID
+    function purgeEntries() {
+        logPurge(`time to purgeEntries, with ${Object.keys(tracking).length} devices currently seen`);
+
+        const now = Date.now();
+        Object.keys(tracking).forEach((macAddress) => {
+            const lastSeenDate = tracking[macAddress];
+
+            // If device was not seen for more than DELAY (converted to milliseconds)
+            const delta = now - new Date(lastSeenDate).getTime();
+            logPurge(`device: ${macAddress} was seen ${lastSeenDate}, corresponds to ${delta} ms ago`)
+            if (delta > (delay * 60 * 1000)) {
+                logPurge(`considering device: ${macAddress} has left SSID`);
+
+                // Notify Webex Teams
+                // Send notification of new presence detected
+                let owner = myPeople[macAddress];
+                let message = {
+                    roomId: process.env.TEAMS_SPACE,
+                    markdown: `heads up: seems ${owner} has left ${process.env.MERAKI_SSID}`
+                };
+                teamsClient.messageSend(message)
+                    .then((message) => {
+                        fine('message pushed successfully to Teams')
+
+                        // Remove entry from seen devices
+                        delete tracking[macAddress]
+                    })
+                    .catch((err) => {
+                        debug(`could not push message to Teams, err: ${err.message}`);
+                    });
+
+            }
+        })
+    }
 });
 

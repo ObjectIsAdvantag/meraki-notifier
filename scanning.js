@@ -1,3 +1,8 @@
+//
+// Copyright (c) 2019 Cisco Systems
+// Licensed under the MIT License 
+//
+
 /** 
  * Check the payload structure complies with
  * https://n193.meraki.com/manage/support?search_term=3965#CMX_Location_API

@@ -1,58 +1,73 @@
 # Meraki notifier to Webex Teams
 
-a Node.js webhook that posts messages to Webex Teams as devices are detected
+This webhook listens to Meraki scanning notifications, and posts messages to a Webex Teams space as known devices are seen/leave.
 
 To run this code, you will need to:
 1. a Meraki Access Point
-2. create a scanning Webhook
+2. create a scanning Webhook pointing to this code (exposed at a public URL / ngrok)
 3. create a Teams Space and a Bot token
 4. update the list of known Mac addresses in [people.js](./people.js)
-5. launch the app with specified env variables
+5. launch the app with specified env variables (see below)
 
 All set! please reach to your space and wait for notifications to fly in as devices connect
+
+![bot in action](./img/DeviceSeenLeft.png)
 
 
 ## Quick start on Glitch
 
-Click [![Remix on Glitch](https://cdn.glitch.com/2703baf2-b643-4da7-ab91-7ee2a2d00b5b%2Fremix-button.svg)](https://glitch.com/edit/#!/import/github/ObjectIsAdvantag/smartsheet-to-webex-teams)
+Click [![Remix on Glitch](https://cdn.glitch.com/2703baf2-b643-4da7-ab91-7ee2a2d00b5b%2Fremix-button.svg)](https://glitch.com/edit/#!/import/github/ObjectIsAdvantag/meraki-notifier)
 
-Then open the `.env` file and paste your bot's token, space id, as well as your smartsheet token and sheet id.
+Then open the `.env` file and paste the Webex Teams info: bot's token and space id
+You app is now running (with default Meraki settings).
+Your app healthcheck is accessible at your webhook public url.
 
-You app is all set: the webhook got automatically created from glitch's PROJECT_DOMAIN env variable.
+Open the Meraki dashboard, and create a scanning webhook pointing to your webhook URL on glitch.
+Tip: add `/scanning` to the glitch public URL
 
-Your app healthcheck is accessible at your application public url.
+Now, update the Meraki entry in `.env` with your meraki SSID, secret and validator.
+And update the list of known Mac addresses in `./people.js`
 
-Go to your smartsheet and start entering new values,
-then customize the mustache template for your smartsheet columns.
+All set! Connect your device it for notifications to fly in as devices connect
 
 
-## Launch the SmartSheet to Webex Teams app
+## Run locally
 
 For **Mac, Linux and bash users**, open a terminal and type:
 
 ```shell
-git clone https://github.com/CiscoDevNet/smartsheet-to-webex-teams
-cd smartsheet-to-webex-teams
+git clone https://github.com/ObjectIsAdvantag/meraki-notifier
+cd meraki-notifier
 npm install
-DEBUG=s2wt*,register*,challenge* SMARTSHEET_TOKEN="ka5XXXXXXXXXXXXXXXX" SMARTSHEET_ID="627552342630404" BOT_TOKEN="MmQ5ZTBYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY" SPACE_ID="Y2lzY29zZZZZZZZZZZZZZZZZZZZZZZZZ" PUBLIC_URL="https://e4a1e175.ngrok.io" node webhook.js
+
+DEBUG=meraquoi* TEAMS_SPACE=<your-space-id> TEAMS_TOKEN=<your-bot-token> MERAKI_SECRET=CiscoDevNet MERAKI_VALIDATOR=<from-meraki-dashboard> MERAKI_SSID=<your-SSID> node webhook.js
+Meraki scanning webhook listening at: 8080
+   GET  /          : for health checks
+   POST /scanning  : to receive meraki scanning events node webhook.js
+  
+  meraquoi:purge cron checking every 1 minute(s), for not seen devices over 10 minute(s) +0ms
+  meraquoi:purge time to purgeEntries, with 0 devices currently seen +44s
+  meraquoi new scanning data received: Fri, 05 Apr 2019 08:36:13 GMT +0ms
+  meraquoi processing payload with: 6 observations +3ms
+  meraquoi device: 4c:66:41:15:9c:bc, from owner: Stève, detected on SSID:  Meraqui +1ms
+  meraquoi updated last seen time to: 2019-04-05T08:35:04Z, for client: 4c:66:41:15:9c:bc +6ms
 ```
 
-For **Windows users**, open a command shell and type:
+For **Windows users**, open a CMD shell and type:
 
 ```shell
-git clone https://github.com/CiscoDevNet/smartsheet-to-webex-teams
+git clone https://github.com/ObjectIsAdvantag/meraki-notifier
 cd smartsheet-to-webex-teams
 npm install
-set DEBUG=webhook*
-set BOT_TOKEN=XXXXXXXXX
-set SPACE_ID=YYYYYYYYYYY
+set DEBUG=meraquoi*
+set TEAMS_SPACE=<your-space-id>
+set TEAMS_TOKEN=<your-bot-token>
+set MERAKI_SECRET=CiscoDevNet
+set MERAKI_VALIDATOR=<from-meraki-dashboard>
+set MERAKI_SSID=<your-SSID>
 ...
 node webhook.js
 ```
-
-And here is an example of environment variables on Heroku:
-
-![Heroku env variables](img/heroku_env.png)
 
 
 **Done, your webhook is live**
@@ -64,48 +79,3 @@ From the command line, type:
 curl -X GET http://localhost:8080
 ```
 
-
-## To manually register your app as a Smartsheet Webhook
-
-Note: this step is now optional as the registration is automatically performed at launch.
-
-Create a Smartsheet API token from your smartsheet account:
-- login
-- click your avatar, pick "Apps and Integrations..."
-- among your Personal Settings, select "API Access"
-- click the "Generate new access token" button
-
-Now, let's list your smartsheets and look for the identifier of the smartsheet you want to monitor. From the terminal, run the command below:
-
-```shell
-curl -X GET https://api.smartsheet.com/2.0/sheets \
-  -H 'Authorization: Bearer qq0w5090qq0w5090qq0w5090' 
-```
-
-Almost there, create a SmartSheet webhook on the command line by typing:
-
-```shell
-curl -X POST https://api.smartsheet.com/2.0/webhooks \
-  -H 'Authorization: Bearer qq0w5090qq0w5090qq0w5090' \
-  -H 'Content-Type: application/json' \
-  -d '{ 
-    "callbackUrl": "https://e6174831.ngrok.io",
-    "events": ["*.*"],
-    "name": "From Postman",
-    "scope": "sheet",
-    "scopeObjectId" : "6275510532630404",
-    "version": "1"
-}'
-```
-
-Finally, let's validate the newly created webhook above by updating it (as per the Smartsheet specs). Please replace with the webhook id below:
-
-```shell
-curl -X PUT https://api.smartsheet.com/2.0/webhooks/5481972073031556 \
-  -H 'Authorization: Bearer qq0w5090qq0w5090qq0w5090' \
-  -H 'Content-Type: application/json' \
-  -d '{ "enabled": true }'
-```
-
-That's it, create a new row entry, and check it shows up in the console.
-Note: update the provided sample with [your own custom logic](./webhook.js#146)!
