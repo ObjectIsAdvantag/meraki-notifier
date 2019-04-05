@@ -61,7 +61,7 @@ app.route("/")
     })
 
 // Where Meraki will post scanning payloads
-const cmxRoute = process.env.ROUTE || '/scanning';
+const cmxRoute = process.env.CMX_ROUTE || '/scanning';
 const checkScanningPayload = require("./scanning");
 app.route(cmxRoute)
 
