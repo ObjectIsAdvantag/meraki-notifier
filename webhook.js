@@ -190,7 +190,7 @@ app.listen(port, function () {
     const delay = process.env.HASLEFT_DELAY || 10; // has left SSID if not seen for >10 minutes
     const job = new CronJob(cronTime, purgeEntries, null, false, 'Europe/Paris');
     job.start();
-    logPurge(`started cron with time: ${interval}, looking for not seen devices over ${delay} minute(s)`)
+    logPurge(`started cron with time: ${cronTime}, looking for not seen devices over ${delay} minute(s)`)
 
     // Elaps time in minutes after which we consider the device has left the SSID
     function purgeEntries() {
