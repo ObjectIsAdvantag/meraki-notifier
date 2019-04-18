@@ -63,7 +63,7 @@ app.route("/")
 // Where Meraki will post scanning payloads
 const cmxRoute = process.env.CMX_ROUTE || '/scanning';
 const checkScanningPayload = require("./scanning");
-let firstScanningNotification = true;
+let logScanningHealth = true;
 app.route(cmxRoute)
 
     // First-time organisation-specific validator string
@@ -99,8 +99,8 @@ app.route(cmxRoute)
         res.status(200).json({ message: "fine, the event is being processed by the webhook" });
 
         // Check for row created events
-        chatops(`scanning notification received: ${new Date(latest).toGMTString()}`, (!firstScanningNotification));
-        firstScanningNotification = false;
+        chatops(`webhook all set! scanning event received at: ${new Date(latest).toGMTString()}`, (!logScanningHealth));
+        logScanningHealth = false;
         processScanningPayload(payload);
         return;
     })
