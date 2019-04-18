@@ -63,6 +63,7 @@ app.route("/")
 // Where Meraki will post scanning payloads
 const cmxRoute = process.env.CMX_ROUTE || '/scanning';
 const checkScanningPayload = require("./scanning");
+let firstScanningNotification = true;
 app.route(cmxRoute)
 
     // First-time organisation-specific validator string
@@ -98,6 +99,8 @@ app.route(cmxRoute)
         res.status(200).json({ message: "fine, the event is being processed by the webhook" });
 
         // Check for row created events
+        chatops(`scanning notification received: ${new Date(latest).toGMTString()}`, (!firstScanningNotification));
+        firstScanningNotification = false;
         processScanningPayload(payload);
         return;
     })
@@ -149,7 +152,7 @@ function processScanningPayload(payload) {
                 // Send notification of new presence detected
                 const message = {
                     roomId: process.env.TEAMS_SPACE,
-                    markdown: `good news: ${owner} has reached ${process.env.MERAKI_SSID}`
+                    markdown: `good news: ${owner} has reached ${ssid}`
                 };
                 teamsClient.messageSend(message)
                     .then((message) => {
@@ -211,7 +214,7 @@ app.listen(port, function () {
                 let owner = myPeople[macAddress];
                 let message = {
                     roomId: process.env.TEAMS_SPACE,
-                    markdown: `heads up: seems ${owner} has left ${process.env.MERAKI_SSID}`
+                    markdown: `heads up: seems ${owner} has left ${ssid}`
                 };
                 teamsClient.messageSend(message)
                     .then((message) => {
@@ -227,5 +230,39 @@ app.listen(port, function () {
             }
         })
     }
+
+    // Log to Teams
+    let startedLog = `Notifier started at: ${new Date(started).toISOString()}`;
+    startedLog += `\n- version: ${require('./package.json').version}`;
+    startedLog += `\n- SSID: ${ssid}`;
+    startedLog += `\n- cron pattern: ${cronTime}`;
+    
+    logPurge(`started cron with time: , looking for not seen devices over ${delay} minute(s)`)
+
+
+    startedLog += `\n\nnotifying for ${Object.keys(myPeople).length} device(s):`;
+    Object.keys(myPeople).forEach(key => {
+        startedLog += `\n- ${myPeople[key]}: ${key}`;
+    });
+    chatops(startedLog);
 });
+
+function chatops(logEntry, doNotLog) {
+    if (doNotLog) {
+        fine('skipping logging to Teams')
+        return;
+    }
+
+    let message = {
+        roomId: process.env.TEAMS_SPACE,
+        markdown: logEntry
+    };
+    teamsClient.messageSend(message)
+        .then((logEntry) => {
+            fine('chatops pushed successfully to Teams')
+        })
+        .catch((err) => {
+            debug(`could not push chatops to Teams, err: ${err.message}`);
+        });
+}
 
