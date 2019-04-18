@@ -184,12 +184,13 @@ app.listen(port, function () {
     // Launch Cron that purges not seen devices
     const logPurge = require("debug")("meraquoi:purge");
     const CronJob = require('cron').CronJob;
-    // Every minute, Monday to Friday
-    const interval = process.env.HASLEFT_CRON || 1; // check every minute by default
+
+    // Setup cron to purge not seen devices
+    const cronTime = process.env.HASLEFT_CRONTIME || "0 */1 * * * 1-5"; // check every minute by default, monday to friday
     const delay = process.env.HASLEFT_DELAY || 10; // has left SSID if not seen for >10 minutes
-    const job = new CronJob('0 */1 * * * 1-5', purgeEntries, null, false, 'Europe/Paris');
+    const job = new CronJob(HASLEFT_CRONTIME, purgeEntries, null, false, 'Europe/Paris');
     job.start();
-    logPurge(`cron checking every ${interval} minute(s), for not seen devices over ${delay} minute(s)`)
+    logPurge(`started cron with time: ${interval}, looking for not seen devices over ${delay} minute(s)`)
 
     // Elaps time in minutes after which we consider the device has left the SSID
     function purgeEntries() {
