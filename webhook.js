@@ -190,7 +190,7 @@ app.listen(port, function () {
 
     // Setup cron to purge not seen devices
     const cronTime = process.env.HASLEFT_CRONTIME || "0 */1 * * * 1-5"; // check every minute by default, monday to friday
-    const delay = process.env.HASLEFT_DELAY || 10; // has left SSID if not seen for >10 minutes
+    const delay = process.env.HASLEFT_DELAY || 15; // has left SSID if not seen for >15 minutes
     const job = new CronJob(cronTime, purgeEntries, null, false, 'Europe/Paris');
     job.start();
     logPurge(`started cron with time: ${cronTime}, looking for not seen devices over ${delay} minute(s)`)
