@@ -189,11 +189,11 @@ app.listen(port, function () {
     const CronJob = require('cron').CronJob;
 
     // Setup cron to purge not seen devices
-    const cronTime = process.env.HASLEFT_CRONTIME || "0 */1 * * * 1-5"; // check every minute by default, monday to friday
-    const delay = process.env.HASLEFT_DELAY || 15; // has left SSID if not seen for >15 minutes
-    const job = new CronJob(cronTime, purgeEntries, null, false, 'Europe/Paris');
+    const pattern = process.env.HASLEFT_CRONPATTERN || "0 */1 * * * *"; // check every minute by default
+    const elapse = process.env.HASLEFT_ELAPSE || 15; // has left SSID if not seen for >15 minutes by default
+    const job = new CronJob(pattern, purgeEntries, null, false, 'Europe/Paris');
     job.start();
-    logPurge(`started cron with time: ${cronTime}, looking for not seen devices over ${delay} minute(s)`)
+    logPurge(`started cron with pattern: ${pattern}, considering devices have left SSID after: ${elapse} minute(s)`)
 
     // Elaps time in minutes after which we consider the device has left the SSID
     function purgeEntries() {
@@ -206,7 +206,7 @@ app.listen(port, function () {
             // If device was not seen for more than DELAY (converted to milliseconds)
             const delta = now - new Date(lastSeenDate).getTime();
             logPurge(`device: ${macAddress} was seen ${lastSeenDate}, corresponds to ${delta} ms ago`)
-            if (delta > (delay * 60 * 1000)) {
+            if (delta > (elapse * 60 * 1000)) {
                 logPurge(`considering device: ${macAddress} has left SSID`);
 
                 // Notify Webex Teams
@@ -224,8 +224,8 @@ app.listen(port, function () {
                         delete tracking[macAddress]
                     })
                     .catch((err) => {
-                        debug(`could not push message to Teams, err: ${err.message}`);
-                    });
+                        debug(`could not push message to Teams, err: ${err.message}`)
+                    })
 
             }
         })
@@ -235,10 +235,10 @@ app.listen(port, function () {
     let startedLog = `Notifier started at: ${new Date(started).toISOString()}`;
     startedLog += `\n- version: ${require('./package.json').version}`;
     startedLog += `\n- SSID: ${ssid}`;
-    startedLog += `\n- cron pattern: ${cronTime}`;
+    startedLog += `\n- has left elapse: ${elapse} min`;
+    startedLog += `\n- cron pattern: ${pattern}`;
     
-    logPurge(`started cron with time: , looking for not seen devices over ${delay} minute(s)`)
-
+    startedLog += `\n\nstarted cron with pattern: ${pattern}, considering devices have left SSID after: ${elapse} minute(s)`;
 
     startedLog += `\n\nnotifying for ${Object.keys(myPeople).length} device(s):`;
     Object.keys(myPeople).forEach(key => {
