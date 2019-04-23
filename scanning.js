@@ -71,42 +71,42 @@
  */
 
 // Loggers
-const debug = require("debug")("scanning");
-const fine = require("debug")("scanning:fine");
+const debug = require("debug")("scanning")
+const fine = require("debug")("scanning:fine")
 
 function checkPayload(payload) {
     if (!payload) {
-        debug(`unexpected scanning payload: null or undefined`);
-        return false;
+        debug(`unexpected scanning payload: null or undefined`)
+        return false
     }
     if (payload.version !== '2.0') {
-        debug(`unexpected scanning version: ${payload.version}, expecting '2.0'`);
-        return false;
+        debug(`unexpected scanning version: ${payload.version}, expecting '2.0'`)
+        return false
     }
     if (payload.type !== 'DevicesSeen') {
-        debug(`unexpected scanning type: ${payload.type}, expecting 'DevicesSeen'`);
-        return false;
+        debug(`unexpected scanning type: ${payload.type}, expecting 'DevicesSeen'`)
+        return false
     }
     if (!payload.data) {
-        debug(`unexpected scanning structure: no data`);
-        return false;
+        debug(`unexpected scanning structure: no data`)
+        return false
     }
     if (!payload.data.apMac) {
-        debug(`unexpected scanning structure: no apMac`);
-        return false;
+        debug(`unexpected scanning structure: no apMac`)
+        return false
     }
     fine(`scanning AP mac address: ${payload.data.apMac}`)
     if (!payload.data.observations) {
-        debug(`unexpected scanning structure: no observations structure`);
-        return false;
+        debug(`unexpected scanning structure: no observations structure`)
+        return false
     }
     if (!(payload.data.observations instanceof Array)) {
-        debug(`unexpected scanning structure: observations is not an array`);
-        return false;
+        debug(`unexpected scanning structure: observations is not an array`)
+        return false
     }
 
     fine(`scanning AP sent : ${payload.data.observations.length} observations`)
-    return true;
+    return true
 }
 
-module.exports = checkPayload;
+module.exports = checkPayload

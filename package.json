@@ -1,6 +1,6 @@
 {
   "name": "meraki-notifier",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Meraki notifier to Webex Teams",
   "main": "webhook.js",
   "scripts": {
