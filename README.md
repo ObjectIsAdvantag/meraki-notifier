@@ -1,6 +1,7 @@
+[![published](https://static.production.devnetcloud.com/codeexchange/assets/images/devnet-published.svg)](https://developer.cisco.com/codeexchange/github/repo/ObjectIsAdvantag/meraki-notifier)
 # Meraki notifier to Webex Teams
 
-This webhook listens to Meraki scanning notifications, and posts messages to a Webex Teams space as known devices are seen/leave.
+This webhook listens to Meraki scanning notifications, and posts messages to a Webex Teams space as known devices are seen/leaving the Meraki SSID.
 
 To run this code, you will need to:
 1. a Meraki Access Point
