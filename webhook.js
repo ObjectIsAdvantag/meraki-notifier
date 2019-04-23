@@ -63,7 +63,7 @@ app.route("/")
 // Where Meraki will post scanning payloads
 const cmxRoute = process.env.CMX_ROUTE || '/scanning';
 const checkScanningPayload = require("./scanning");
-let logScanningHealth = true;
+let waitingForFirstNotification = true;
 app.route(cmxRoute)
 
     // First-time organisation-specific validator string
@@ -98,11 +98,19 @@ app.route(cmxRoute)
         fine("responded OK to Meraki");
         res.status(200).json({ message: "fine, the event is being processed by the webhook" });
 
-        // Check for row created events
-        chatops(`webhook all set! scanning event received at: ${new Date(latest).toGMTString()}`, (!logScanningHealth));
-        logScanningHealth = false;
+        // Log if this is the first notification received: everything's going well
+        if (waitingForFirstNotification) {
+            waitingForFirstNotification = false
+            chatops(`webhook all set! scanning event received at: ${new Date(latest).toGMTString()}`, function (err) {
+                // Process scanning event
+                processScanningPayload(payload)
+            })
+            return
+        }
+        
+        // Process scanning event
         processScanningPayload(payload);
-        return;
+        return
     })
 
 
@@ -150,28 +158,18 @@ function processScanningPayload(payload) {
                 debug(`device: ${observation.clientMac}, from owner: ${owner}, detected on SSID:  ${process.env.MERAKI_SSID}`)
 
                 // Send notification of new presence detected
-                const message = {
-                    roomId: process.env.TEAMS_SPACE,
-                    markdown: `good news: ${owner} has reached ${ssid}`
-                };
-                teamsClient.messageSend(message)
-                    .then((message) => {
-                        fine('message pushed successfully to Teams')
-
-                        // Continue to UPDATE last seen
-                        // see below
-                    })
-                    .catch((err) => {
-                        debug(`could not push message to Teams, err: ${err.message}`);
-                        // We won't update last seen since the notification could not be sent
-                        debug(`ignoring last seen for ${owner}`)
-                        return;
-                    });
+                const message = `good news: ${owner} has reached ${ssid}`
+                chatops(message, function (err) {
+                    // Init last seen time
+                    debug(`init last seen time to: ${observation.seenTime}, for client: ${observation.clientMac}`)
+                    tracking[observation.clientMac] = observation.seenTime;
+                })
+                return
             }
 
-            // UPDATE last seen
+            // Update last seen time
+            debug(`updating last seen time to: ${observation.seenTime}, for client: ${observation.clientMac}`)
             tracking[observation.clientMac] = observation.seenTime;
-            debug(`updated last seen time to: ${observation.seenTime}, for client: ${observation.clientMac}`)
         });
 }
 
@@ -209,24 +207,14 @@ app.listen(port, function () {
             if (delta > (elapse * 60 * 1000)) {
                 logPurge(`considering device: ${macAddress} has left SSID`);
 
-                // Notify Webex Teams
-                // Send notification of new presence detected
-                let owner = myPeople[macAddress];
-                let message = {
-                    roomId: process.env.TEAMS_SPACE,
-                    markdown: `heads up: seems ${owner} has left ${ssid}`
-                };
-                teamsClient.messageSend(message)
-                    .then((message) => {
-                        fine('message pushed successfully to Teams')
-
-                        // Remove entry from seen devices
-                        delete tracking[macAddress]
-                    })
-                    .catch((err) => {
-                        debug(`could not push message to Teams, err: ${err.message}`)
-                    })
-
+                // Send notification to Teams that device has left
+                let owner = myPeople[macAddress]
+                let message = `heads up: seems ${owner} has left ${ssid}. Was last seen at: ${lastSeenDate}`
+                chatops(message, function (err) {
+                    // Remove entry from seen devices
+                    fine(`removing entry: ${macAddress} from tracking list`)
+                    delete tracking[macAddress]
+                })
             }
         })
     }
@@ -235,9 +223,7 @@ app.listen(port, function () {
     let startedLog = `Notifier started at: ${new Date(started).toISOString()}`;
     startedLog += `\n- version: ${require('./package.json').version}`;
     startedLog += `\n- SSID: ${ssid}`;
-    startedLog += `\n- has left elapse: ${elapse} min`;
-    startedLog += `\n- cron pattern: ${pattern}`;
-    
+
     startedLog += `\n\nstarted cron with pattern: ${pattern}, considering devices have left SSID after: ${elapse} minute(s)`;
 
     startedLog += `\n\nnotifying for ${Object.keys(myPeople).length} device(s):`;
@@ -247,12 +233,7 @@ app.listen(port, function () {
     chatops(startedLog);
 });
 
-function chatops(logEntry, doNotLog) {
-    if (doNotLog) {
-        fine('skipping logging to Teams')
-        return;
-    }
-
+function chatops(logEntry, cb) {
     let message = {
         roomId: process.env.TEAMS_SPACE,
         markdown: logEntry
@@ -260,9 +241,11 @@ function chatops(logEntry, doNotLog) {
     teamsClient.messageSend(message)
         .then((logEntry) => {
             fine('chatops pushed successfully to Teams')
+            if (cb) cb(null)
         })
         .catch((err) => {
-            debug(`could not push chatops to Teams, err: ${err.message}`);
+            debug(`could not push chatops to Teams, err: ${err.message}`)
+            if (cb) cb(err)
         });
 }
 
