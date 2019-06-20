@@ -140,7 +140,7 @@ function processScanningPayload(payload) {
             }
             const deviceOwner = myPeople[observation.clientMac]
             if (!deviceOwner) {
-                fine('device not in list')
+                fine(`device: ${observation.clientMac} is not known`)
                 return false
             }
             fine(`found device owner: ${deviceOwner}, for mac address: ${observation.clientMac}`)
@@ -184,13 +184,18 @@ app.listen(port, function () {
 
     // Launch Cron that purges not seen devices
     const logPurge = require("debug")("meraquoi:purge")
-    const CronJob = require('cron').CronJob
+    
+    // check every minute by default
+    const pattern = process.env.HASLEFT_CRONPATTERN || "0 */1 * * * *" 
+    
+    // has left SSID if not seen for >15 minutes by default
+    const elapse = process.env.HASLEFT_ELAPSE || 15
 
     // Setup cron to purge not seen devices
-    const pattern = process.env.HASLEFT_CRONPATTERN || "0 */1 * * * *" // check every minute by default
-    const elapse = process.env.HASLEFT_ELAPSE || 15 // has left SSID if not seen for >15 minutes by default
+    const CronJob = require('cron').CronJob
     const job = new CronJob(pattern, purgeEntries, null, false, 'Europe/Paris')
     job.start()
+    
     logPurge(`started cron with pattern: ${pattern}, considering devices have left SSID after: ${elapse} minute(s)`)
 
     // Elaps time in minutes after which we consider the device has left the SSID
